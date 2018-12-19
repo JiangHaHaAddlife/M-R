@@ -1,0 +1,74 @@
+package com.tianliangedu.mrExercise;
+
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+/*
+ * 在hdfs某目录中有一系列文件，内容均为","号分隔，
+ * 按","号分隔的各个元素的出现频率
+ */
+public class Exercise1 {
+	/*
+	 * 继承map框架的mapper类，重写map方法
+	 */
+	public static class MyMapper extends Mapper<Object, Text, Text, IntWritable>{
+		//声明全局变量，存储字符计数个数
+		private static final IntWritable one = new IntWritable(1);
+		//声明全局变量，存储字符值
+		private Text word = new Text();
+		
+		//重写map方法，依次逐个k-v项处理。有多少k-v，此方法被调用多少次
+		@Override
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException{
+			//使用字符串切分处理类
+			StringTokenizer str = new StringTokenizer(value.toString(),",");
+			//循环遍历每一个字符，构造k-v输出
+			while(str.hasMoreTokens()){
+				word.set(str.nextToken());
+				context.write(word, one);
+			}
+		}
+	}
+	/*
+	 * 继承reduce框架中的reducer类，重写reduce方法
+	 */
+	public static class MyReducer extends Reducer<Text, IntWritable, Text, IntWritable>{
+		//声明全局变量，存储字符的计数值
+		private IntWritable result = new IntWritable();
+		//重写reduce方法，依次k-v逐个执行此方法。有多少k-v，此方法执行多少次
+		@Override
+		public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException{
+			//循环遍历集合v，累加计数
+			int sum = 0;
+			for(IntWritable val : values){
+				sum += val.get();
+			}
+			result.set(sum);
+			context.write(key, result);
+		}
+	}
+	
+	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+		Configuration hadoopConf = new Configuration();
+		Job job = Job.getInstance(hadoopConf, "wy_exercise1");
+		job.setJarByClass(Exercise1.class);
+		job.setMapperClass(MyMapper.class);
+		job.setCombinerClass(MyReducer.class);
+		job.setReducerClass(MyReducer.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(IntWritable.class);
+		FileInputFormat.addInputPath(job, new Path(args[0]));
+		FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		System.exit(job.waitForCompletion(true)? 0 : 1);				
+	}
+}
